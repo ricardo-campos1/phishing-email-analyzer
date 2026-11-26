@@ -1,0 +1,29 @@
+Authentication-Results: mx.recipient.example; spf=softfail smtp.mailfrom=billing-dept.example; dkim=none; dmarc=none header.from=billing-dept.example
+Received: from mx.recipient.example (mx.recipient.example [192.0.2.25])
+    by inbox.recipient.example with ESMTPS; Fri, 13 Nov 2026 14:02:09 -0500
+Received: from smtp.billing-dept.example (unknown [198.51.100.66])
+    by mx.recipient.example with ESMTP; Fri, 13 Nov 2026 14:02:07 -0500
+Return-Path: <billing@billing-dept.example>
+From: "Accounts Payable" <billing@billing-dept.example>
+To: you@recipient.example
+Subject: Overdue invoice #20931
+Date: Fri, 13 Nov 2026 14:02:00 -0500
+Message-ID: <inv-20931@billing-dept.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="m1"
+
+--m1
+Content-Type: text/plain; charset="utf-8"
+
+Hello,
+
+Your invoice is overdue. Please review the attached copy today.
+
+--m1
+Content-Type: application/octet-stream; name="invoice_20931.pdf.exe"
+Content-Disposition: attachment; filename="invoice_20931.pdf.exe"
+Content-Transfer-Encoding: base64
+
+VGhpcyBpcyBhIGhhcm1sZXNzIHBsYWNlaG9sZGVyLCBub3QgYSByZWFsIHByb2dyYW0uCg==
+
+--m1--
