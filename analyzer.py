@@ -197,6 +197,100 @@ def check_authentication(msg, findings):
                         f"Envelope sender {mail_from.group(1)} doesn't match "
                         f"From domain {header_from.group(1)}")
     return results
+# ---------------------------------------------------------------------------
+# Step 6: links
+# ---------------------------------------------------------------------------
+
+URL_SHORTENERS = {"bit.ly" , "tinyurl.com", "t.co", "is.gd", "ow.ly", "cutt.ly", "rebrand.ly"}
+
+URL_RE = re.compile(r"https?//[^\s<>\"']+")
+DOMAIN_RE = re.compile(r"\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b")
+
+class LinkParser(HTMLParser):
+    """Collect (href, visible text) for every <a> tag in an HTML body."""
+
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self._href = None
+        self._text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._href = dict(attrs).get("href")
+            self._text = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._href is not None:
+            self.links.append((self._href.strip(), "".join(self._text).strip()))
+            self._href = None
+
+
+def extract_links(msg):
+    """Return a list of (url, link_text) from the text and HTML bodies."""
+    found = {}  # url -> text; a dict keeps order and removes duplicates
+    for part in msg.walk():
+        if part.is_multipart() or part.get_content_disposition() == "attachment":
+            continue
+        content_type = part.get_content_type()
+        if content_type == "text/html":
+            parser = LinkParser()
+            parser.feed(part.get_content())
+            for url, text in parser.links:
+                if url.lower().startswith(("http://", "https://")):
+                    found[url] = text or found.get(url, "")
+        elif content_type == "text/plain":
+            for url in URL_RE.findall(part.get_content()):
+                url = url.rstrip(".,);")
+                found.setdefault(url, "")
+    return list(found.items())
+
+
+def defang(url):
+    """Make a URL unclickable: https://evil.example -> hxxps://evil[.]example"""
+    parts = urlsplit(url)
+    rest = url.split(parts.netloc, 1)[1] if parts.netloc else ""
+    return parts.scheme.replace("http", "hxxp") + "://" + parts.netloc.replace(".", "[.]") + rest
+
+
+def check_link(url, text, findings):
+    """Run every link check on one URL."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    shown = defang(url)
+
+    try:
+        ipaddress.ip_address(host)
+        add_finding(findings, "HIGH", "Link", f"Goes to a bare IP address: {shown}")
+        is_ip = True
+    except ValueError:
+        is_ip = False
+
+    # Link text that names a different site than the real destination
+    text_domain = DOMAIN_RE.search(text.lower())
+    if text_domain:
+        shown_host = urlsplit(text).hostname if "://" in text else text_domain.group(0)
+        if shown_host and registered_domain(shown_host) != registered_domain(host):
+            add_finding(findings, "HIGH", "Link",
+                        f"Text shows {shown_host} but the link goes to {shown}")
+
+    if not is_ip:
+        reason = check_lookalike(host)
+        if reason:
+            add_finding(findings, "HIGH", "Link", f"{shown} {reason}")
+        if registered_domain(host) in URL_SHORTENERS:
+            add_finding(findings, "MEDIUM", "Link", f"URL shortener hides the destination: {shown}")
+        if host.count(".") >= 4:
+            add_finding(findings, "LOW", "Link", f"Unusually many subdomains: {shown}")
+
+    if "@" in parts.netloc:
+        add_finding(findings, "LOW", "Link", f"Has an @ in the address, which can hide the real host: {shown}")
+    if parts.scheme == "http" and re.search(r"login|signin|verify|account|password", url.lower()):
+        add_finding(findings, "LOW", "Link", f"Login-style page over plain http: {shown}")
 # Temporary: print a few headers so you can see it works. Replaced in step 8.
 if __name__ == "__main__":
     msg = load_email(sys.argv[1])
