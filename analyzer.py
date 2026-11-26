@@ -201,9 +201,9 @@ def check_authentication(msg, findings):
 # Step 6: links
 # ---------------------------------------------------------------------------
 
-URL_SHORTENERS = {"bit.ly" , "tinyurl.com", "t.co", "is.gd", "ow.ly", "cutt.ly", "rebrand.ly"}
+URL_SHORTENERS = {"bit.ly", "tinyurl.com", "t.co", "is.gd", "ow.ly", "cutt.ly", "rebrand.ly"}
 
-URL_RE = re.compile(r"https?//[^\s<>\"']+")
+URL_RE = re.compile(r"https?://[^\s<>\"']+")
 DOMAIN_RE = re.compile(r"\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b")
 
 class LinkParser(HTMLParser):
@@ -336,7 +336,6 @@ def check_attachments(msg, findings):
             add_finding(findings, "LOW", "Attachment",
                         f"{name} is labeled {content_type}, expected {expected}")
     return attachments
-# Temporary: print a few headers so you can see it works. Replaced in step 8.
 # ---------------------------------------------------------------------------
 # Step 8: score, report and command line
 # ---------------------------------------------------------------------------
