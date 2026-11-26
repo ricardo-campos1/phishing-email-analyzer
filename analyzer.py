@@ -337,7 +337,127 @@ def check_attachments(msg, findings):
                         f"{name} is labeled {content_type}, expected {expected}")
     return attachments
 # Temporary: print a few headers so you can see it works. Replaced in step 8.
+# ---------------------------------------------------------------------------
+# Step 8: score, report and command line
+# ---------------------------------------------------------------------------
+
+POINTS = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+SEVERITY_ORDER = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+
+
+def score(findings):
+    """Add up the points and turn them into a verdict."""
+    total = sum(POINTS[f["severity"]] for f in findings)
+    if total >= 7:
+        verdict = "LIKELY PHISHING"
+    elif total >= 3:
+        verdict = "SUSPICIOUS"
+    else:
+        verdict = "LOW RISK"
+    return total, verdict
+
+
+def analyze(msg):
+    """Run every check and return the results as a dict."""
+    findings = []
+    sender = check_sender(msg, findings)
+    hops = parse_received(msg)
+    auth = check_authentication(msg, findings)
+    links = extract_links(msg)
+    for url, text in links:
+        check_link(url, text, findings)
+    attachments = check_attachments(msg, findings)
+
+    findings.sort(key=lambda f: SEVERITY_ORDER[f["severity"]])
+    total, verdict = score(findings)
+    return {
+        "subject": str(msg.get("Subject", "")),
+        "sender": sender,
+        "hops": hops,
+        "authentication": auth,
+        "links": [{"url": defang(url), "text": text} for url, text in links],
+        "attachments": attachments,
+        "findings": findings,
+        "score": total,
+        "verdict": verdict,
+    }
+
+
+def print_report(path, results):
+    """Print a plain-text report."""
+    print("Phishing Email Triage Report")
+    print("=" * 50)
+    print(f"File:        {path}")
+    print(f"Subject:     {results['subject']}")
+    print(f"From:        {results['sender']['from']}")
+    print(f"Reply-To:    {results['sender']['reply_to'] or '(none)'}")
+    print(f"Return-Path: {results['sender']['return_path'] or '(none)'}")
+    print(f"Verdict:     {results['verdict']} (score {results['score']})")
+    print()
+
+    print("Authentication")
+    print("-" * 50)
+    auth = results["authentication"]
+    print("   ".join(f"{m.upper()}: {auth.get(m, 'missing')}" for m in ("spf", "dkim", "dmarc")))
+    print()
+
+    print("Received path (oldest first)")
+    print("-" * 50)
+    for number, hop in enumerate(results["hops"], start=1):
+        print(f"{number}. {hop['from']} [{hop['ip']}] -> {hop['by']}")
+    print()
+
+    print("Links")
+    print("-" * 50)
+    if not results["links"]:
+        print("(none)")
+    for link in results["links"]:
+        print(f"{link['url']}  text: {link['text'] or '(plain text)'}")
+    print()
+
+    print("Attachments")
+    print("-" * 50)
+    if not results["attachments"]:
+        print("(none)")
+    for item in results["attachments"]:
+        print(f"{item['name']}  {item['type']}  {item['size']} bytes")
+        print(f"    SHA-256: {item['sha256']}")
+    print()
+
+    print("Findings")
+    print("-" * 50)
+    if not results["findings"]:
+        print("No findings.")
+    for f in results["findings"]:
+        print(f"[{f['severity']}] {f['category']}: {f['detail']}")
+
+
+def main(argv=None):
+    """Read command-line options, analyze the email and print the report."""
+    arg_parser = argparse.ArgumentParser(
+        description="Triage a suspicious email (.eml) and flag signs of phishing."
+    )
+    arg_parser.add_argument("emlfile", help="path to a saved email, e.g. suspicious.eml")
+    arg_parser.add_argument("--json", metavar="FILE", help="also save the results to this JSON file")
+    args = arg_parser.parse_args(argv)
+
+    try:
+        msg = load_email(args.emlfile)
+    except OSError as error:
+        print(f"Could not read {args.emlfile}: {error}", file=sys.stderr)
+        return 1
+
+    results = analyze(msg)
+    print_report(args.emlfile, results)
+
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as json_file:
+            json.dump(results, json_file, indent=2)
+        print()
+        print(f"Results saved to {args.json}")
+
+    return 0
+
+
 if __name__ == "__main__":
-    msg = load_email(sys.argv[1])
-    for name in ("Subject", "From", "Reply-To", "Return-Path"):
-        print(f"{name}: {msg.get(name, '(none)')}")
+    sys.exit(main())
