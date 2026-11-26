@@ -1,5 +1,4 @@
 # phishing-email-analyzer
-# phishing-email-analyzer
 
 A Python script that reads a saved email (.eml file) and flags the signs of phishing a SOC analyst checks first: spoofed senders, failed SPF/DKIM/DMARC, suspicious links and risky attachments. It ends with a risk score and a verdict.
 
@@ -45,6 +44,60 @@ The three emails in sample_emails are synthetic. They use .example domains and d
 
 Real phishing samples go in real_samples, which is in .gitignore so they never get pushed. Open those only inside a VM.
 
+## Example output
+
+Run inside a VM on a real phishing email from the phishing_pot collection on GitHub:
+
+```
+Phishing Email Triage Report
+==================================================
+File:        real_samples/sample-10015.eml
+Subject:     Bradesco: Você foi contemplado(a) no sorteio semanal Max Prêmios - Protocolo: 795355680
+From:        Bradesco <banco.bradesco@campanhasbradesco565305>
+Reply-To:    (none)
+Return-Path: banco.bradesco@campanhasbradesco565305
+Verdict:     LIKELY PHISHING (score 7)
+
+Authentication
+--------------------------------------------------
+SPF: none   DKIM: none   DMARC: none
+
+Received path (oldest first)
+--------------------------------------------------
+1. [127.0.1.1] [127.0.1.1] -> OSA0EPF000000CD.mail.protection.outlook.com
+2. OSA0EPF000000CD.apcprd02.prod.outlook.com [?] -> SI1PR02CA0005.outlook.office365.com
+3. SI1PR02CA0005.apcprd02.prod.outlook.com [?] -> MW5PR10MB5874.namprd10.prod.outlook.com
+4. MW5PR10MB5874.namprd10.prod.outlook.com [?] -> MW4PR10MB5749.namprd10.prod.outlook.com
+
+Links
+--------------------------------------------------
+hxxps://www[.]office[.]com-pt-br287579329principal@maxpremi-765775392619[.]southamerica-east1[.]run[.]app  text: ACESSAR INTERNET BANKING
+
+Attachments
+--------------------------------------------------
+(none)
+
+Findings
+--------------------------------------------------
+[MEDIUM] Authentication: SPF result is none
+[MEDIUM] Authentication: DKIM result is none
+[MEDIUM] Authentication: DMARC result is none
+[LOW] Link: Has an @ in the address, which can hide the real host: hxxps://www[.]office[.]com-pt-br287579329principal@maxpremi-765775392619[.]southamerica-east1[.]run[.]app
+```
+
+The link is the giveaway. Everything before the @ is a fake username made to look like office.com, and the real host is a cloud app after it.
+
+### Results on real samples
+
+| Sample | Lure | Verdict | What it caught |
+|---|---|---|---|
+| sample-10015 | Bradesco bank prize | LIKELY PHISHING (7) | No SPF, DKIM or DMARC, and an @ hiding the real host |
+| sample-10001 | MetaMask "Enable 2FA" | LOW RISK (2) | Reply-To goes to mailinator.com |
+| sample-10073 | Lowe's free tool set | LOW RISK (0) | Nothing |
+
+The last two passed SPF, DKIM and DMARC because they were sent through real mail services for the domains they came from. A pass only proves the email came from that domain, not that the domain is safe. The analyzer missed them because MetaMask and Lowe's aren't in its brand list, and it doesn't yet flag a brand name in the display name sent from an unrelated domain, or a disposable inbox like mailinator.com in Reply-To.
+
+
 ## How it works
 
 1. **Load:** Python's email module parses the .eml file and decodes encoded headers and body parts.
@@ -63,6 +116,7 @@ Only the topmost Authentication-Results header is read. That's the one added by 
 
 ## Possible next steps
 
+- Flag any display name that names a brand the sending domain doesn't match, and disposable inboxes in Reply-To
 - Look up attachment hashes and link domains on VirusTotal or another threat-intel source
 - Use the Public Suffix List so domains like example.co.uk are handled correctly
 - Check WHOIS for newly registered sender and link domains
