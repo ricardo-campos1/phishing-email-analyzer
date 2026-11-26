@@ -1,0 +1,33 @@
+Authentication-Results: mx.recipient.example; spf=pass smtp.mailfrom=mail.shop.example; dkim=pass header.d=shop.example; dmarc=pass header.from=shop.example
+Received: from mx.recipient.example (mx.recipient.example [192.0.2.25])
+    by inbox.recipient.example with ESMTPS; Thu, 12 Nov 2026 10:00:03 -0500
+Received: from out1.mail.shop.example (out1.mail.shop.example [198.51.100.10])
+    by mx.recipient.example with ESMTPS; Thu, 12 Nov 2026 10:00:01 -0500
+Return-Path: <bounce@mail.shop.example>
+From: "Shop Example" <news@shop.example>
+To: you@recipient.example
+Subject: This week's deals
+Date: Thu, 12 Nov 2026 10:00:00 -0500
+Message-ID: <deals-1112@shop.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset="utf-8"
+
+Hi there,
+
+This week's deals are live: https://shop.example/deals
+
+Thanks for shopping with us.
+
+--b1
+Content-Type: text/html; charset="utf-8"
+
+<html><body>
+<p>Hi there,</p>
+<p><a href="https://shop.example/deals">See this week's deals</a></p>
+<p>Thanks for shopping with us.</p>
+</body></html>
+
+--b1--
