@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+real_samples/
+report.json
