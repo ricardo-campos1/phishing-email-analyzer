@@ -291,6 +291,51 @@ def check_link(url, text, findings):
         add_finding(findings, "LOW", "Link", f"Has an @ in the address, which can hide the real host: {shown}")
     if parts.scheme == "http" and re.search(r"login|signin|verify|account|password", url.lower()):
         add_finding(findings, "LOW", "Link", f"Login-style page over plain http: {shown}")
+# ---------------------------------------------------------------------------
+# Step 7: attachments
+# ---------------------------------------------------------------------------
+
+RISKY_EXTENSIONS = {".exe", ".scr", ".js", ".vbs", ".hta", ".iso", ".img", ".lnk",
+                    ".html", ".htm", ".docm", ".xlsm", ".bat", ".cmd", ".ps1"}
+ARCHIVE_EXTENSIONS = {".zip", ".rar", ".7z"}
+DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".jpg", ".png"}
+
+# What a few common file types should be labeled as in the email
+EXPECTED_TYPES = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".txt": "text/plain",
+}
+
+
+def check_attachments(msg, findings):
+    """List attachments with their SHA-256 and flag risky ones."""
+    attachments = []
+    for part in msg.iter_attachments():
+        name = part.get_filename() or "(no name)"
+        data = part.get_payload(decode=True) or b""
+        content_type = part.get_content_type()
+        sha256 = hashlib.sha256(data).hexdigest()
+        attachments.append({"name": name, "type": content_type, "size": len(data), "sha256": sha256})
+
+        lower = name.lower()
+        ext = os.path.splitext(lower)[1]
+        pieces = lower.split(".")
+
+        if len(pieces) >= 3 and "." + pieces[-2] in DOCUMENT_EXTENSIONS and ext in RISKY_EXTENSIONS:
+            add_finding(findings, "HIGH", "Attachment",
+                        f"{name} has a double extension, so it looks like a document but isn't")
+        elif ext in RISKY_EXTENSIONS:
+            add_finding(findings, "HIGH", "Attachment", f"{name} is a risky file type ({ext})")
+        elif ext in ARCHIVE_EXTENSIONS:
+            add_finding(findings, "MEDIUM", "Attachment", f"{name} is an archive, which can hide other files")
+
+        expected = EXPECTED_TYPES.get(ext)
+        if expected and content_type != expected:
+            add_finding(findings, "LOW", "Attachment",
+                        f"{name} is labeled {content_type}, expected {expected}")
+    return attachments
 # Temporary: print a few headers so you can see it works. Replaced in step 8.
 if __name__ == "__main__":
     msg = load_email(sys.argv[1])
