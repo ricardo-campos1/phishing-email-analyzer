@@ -1,5 +1,4 @@
 # phishing-email-analyzer
-# phishing-email-analyzer
 
 A Python script that reads a saved email (.eml file) and flags the signs of phishing a SOC analyst checks first: spoofed senders, failed SPF/DKIM/DMARC, suspicious links and risky attachments. It ends with a risk score and a verdict.
 
